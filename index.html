@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gastos del viaje</title>
+<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0e7490">
+<link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#eef3f5;--cd:#fff;--tx:#14232b;--mu:#62757f;--ac:#0e7490;--ok:#15803d;--wa:#c2760a;--ko:#c62828;--bd:#d9e3e8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0d1a20;--cd:#15262e;--tx:#e6f0f4;--mu:#8fa5b0;--ac:#38bdf8;--ok:#4ade80;--wa:#fbbf24;--ko:#f87171;--bd:#24404b}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px}
+h1{font-size:1.3rem;margin:0}h2{font-size:1.05rem;margin:0 0 8px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.top{display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px}
+label{display:block;font-size:.85rem;color:var(--mu);margin:10px 0 4px}
+input,select,button{font:inherit;width:100%;padding:11px;border-radius:8px;border:1px solid var(--bd);background:var(--cd);color:var(--tx)}
+button{background:var(--ac);color:#fff;border:0;font-weight:600;cursor:pointer;margin-top:14px}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--bd);margin-top:8px;width:auto;padding:6px 12px;font-weight:500}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.tabs{display:flex;gap:6px;margin-bottom:12px}.tabs button{margin:0;background:var(--cd);color:var(--tx);border:1px solid var(--bd)}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.big{font-size:1.6rem;font-weight:700}.mu{color:var(--mu);font-size:.85rem}
+.bar{height:12px;background:var(--bd);border-radius:6px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--ok)}
+.bar i.w{background:var(--wa)}.bar i.k{background:var(--ko)}
+.cat{margin:8px 0}.cat .bar{height:8px;margin:3px 0}.cat .bar i{background:var(--ac)}
+.days{display:flex;align-items:flex-end;gap:6px;height:130px;margin-top:8px}
+.days div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.7rem;color:var(--mu)}
+.days i{display:block;width:100%;background:var(--ac);border-radius:4px 4px 0 0;min-height:2px}
+.g{display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--bd)}.g:last-child{border:0}
+.g button{width:auto;margin:0;padding:2px 8px;background:transparent;color:var(--ko);border:1px solid var(--bd)}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));background:var(--tx);color:var(--bg);padding:12px;border-radius:8px;display:none;text-align:center}
+.hide{display:none}.neg{color:var(--ko)}
+</style></head><body><main>
+<section id="login" class="card hide"><h1>Gastos del viaje</h1>
+<label for="em">Email</label><input id="em" type="email" autocomplete="username">
+<label for="pw">Contraseña</label><input id="pw" type="password" autocomplete="current-password">
+<button id="go">Ingresar</button></section>
+<section id="app" class="hide">
+<div class="top"><h1>Gastos del viaje</h1><button class="sec" id="out">Salir</button></div>
+<div class="tabs"><button data-t="res" class="on">Resumen</button><button data-t="add">Cargar</button><button data-t="lst">Gastos</button></div>
+<div id="res"></div>
+<div id="add" class="hide card"><h2>Nuevo gasto</h2>
+<label for="who">Persona</label><select id="who"></select>
+<label for="mo">Monto (US$)</label><input id="mo" type="number" inputmode="decimal" step="0.01" min="0">
+<label for="ca">Categoría</label><select id="ca"></select>
+<label for="de">Descripción (opcional)</label><input id="de" type="text" maxlength="80">
+<label for="fe">Fecha</label><input id="fe" type="date">
+<button id="sv">Guardar gasto</button></div>
+<div id="lst" class="hide card"></div>
+</section></main><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SB=supabase.createClient('https://yoikmpzkksjuddlmblxe.supabase.co','sb_publishable_63-A3pCwVkYWlKxhAbjwzg_JiB0VL0O');
+const CATS=['Comida','Indumentaria','Calzado','Accesorios','Beauty','Deporte','Electrónica','Hogar','Souvenirs y regalos','Juguetes y juegos','Transporte','Paseos','Alojamiento','Otros'];
+let me,adm=false,M=[],P={},G=[];
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const usd=n=>'US$ '+Number(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const hoy=()=>new Date().toLocaleDateString('sv-SE');
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>e.style.display='none',3500)}
+function show(id){['login','app'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id))}
+function tab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['res','add','lst'].forEach(x=>$('#'+x).classList.toggle('hide',x!==t))}
+$$('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
+$('#ca').innerHTML=CATS.map(c=>`<option>${esc(c)}</option>`).join('');
+$('#go').onclick=async()=>{const{error}=await SB.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});if(error)return toast('Email o contraseña incorrectos');start()};
+$('#out').onclick=async()=>{await SB.auth.signOut();show('login')};
+async function start(){const{data}=await SB.auth.getSession();if(!data.session)return show('login');me=data.session.user.id;show('app');$('#fe').value=hoy();await load()}
+async function load(){
+ const[a,m,p,g]=await Promise.all([SB.from('admins').select('user_id'),SB.from('miembros').select('*').order('nombre'),SB.from('presupuestos').select('*'),SB.from('gastos').select('*').order('fecha',{ascending:false}).order('id',{ascending:false})]);
+ const err=a.error||m.error||p.error||g.error;if(err)return toast('No se pudo cargar: '+err.message);
+ adm=a.data.length>0;M=m.data;P={};p.data.forEach(x=>P[x.user_id]=+x.monto_usd);G=g.data;
+ $('#who').innerHTML=M.filter(x=>adm||x.user_id===me).map(x=>`<option value="${x.user_id}"${x.user_id===me?' selected':''}>${esc(x.nombre)}</option>`).join('');
+ render()}
+function card(titulo,bud,gs,id){
+ const sp=gs.reduce((s,x)=>s+ +x.monto_usd,0),left=bud-sp,pct=bud?Math.min(100,sp/bud*100):0,cl=pct>=100?'k':pct>=80?'w':'';
+ const by={};gs.forEach(x=>by[x.categoria]=(by[x.categoria]||0)+ +x.monto_usd);
+ const cs=Object.entries(by).sort((a,b)=>b[1]-a[1]);
+ return `<div class="card"><div class="row"><h2>${esc(titulo)}</h2>${id&&(adm||id===me)?`<button class="sec" data-b="${id}">Presupuesto</button>`:''}</div>
+ <div class="row"><span class="big${left<0?' neg':''}">${usd(left)}</span><span class="mu">te queda</span></div>
+ <div class="bar"><i class="${cl}" style="width:${pct}%"></i></div>
+ <div class="mu">Gastado ${usd(sp)} de ${usd(bud)} (${bud?Math.round(sp/bud*100):0}%)</div>
+ ${cs.length?cs.map(([c,v])=>`<div class="cat"><div class="row"><span>${esc(c)}</span><span>${usd(v)}</span></div><div class="bar"><i style="width:${v/cs[0][1]*100}%"></i></div></div>`).join(''):'<p class="mu">Todavía no hay gastos.</p>'}</div>`}
+function render(){
+ const tb=M.reduce((s,x)=>s+(P[x.user_id]||0),0);
+ const ds=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const k=d.toLocaleDateString('sv-SE');ds.push([k,G.filter(x=>x.fecha===k).reduce((s,x)=>s+ +x.monto_usd,0)])}
+ const mx=Math.max(1,...ds.map(d=>d[1]));
+ let h=card('Total del grupo',tb,G,null)+M.map(x=>card(x.nombre,P[x.user_id]||0,G.filter(g=>g.user_id===x.user_id),x.user_id)).join('');
+ h+=`<div class="card"><h2>Gasto por día (últimos 7 días)</h2><div class="days">${ds.map(([k,v])=>`<div><span>${v?Math.round(v):''}</span><i style="height:${v/mx*80}%"></i><span>${k.slice(8)}/${k.slice(5,7)}</span></div>`).join('')}</div></div>`;
+ $('#res').innerHTML=h;
+ $$('[data-b]').forEach(b=>b.onclick=()=>setBud(b.dataset.b));
+ const nm=Object.fromEntries(M.map(x=>[x.user_id,x.nombre]));
+ $('#lst').innerHTML='<h2>Últimos gastos</h2>'+(G.length?G.slice(0,60).map(x=>`<div class="g"><div><b>${usd(x.monto_usd)}</b> ${esc(x.categoria)}<div class="mu">${esc(nm[x.user_id]||'')} · ${x.fecha.slice(8)}/${x.fecha.slice(5,7)}${x.descripcion?' · '+esc(x.descripcion):''}</div></div>${adm||x.user_id===me?`<button data-d="${x.id}" aria-label="Borrar gasto">Borrar</button>`:''}</div>`).join(''):'<p class="mu">Todavía no hay gastos. Cargá el primero en la pestaña Cargar.</p>');
+ $$('[data-d]').forEach(b=>b.onclick=()=>del(b.dataset.d))}
+async function setBud(id){const v=prompt('Presupuesto inicial en US$',P[id]||'');if(v===null)return;const n=parseFloat(v.replace(',','.'));if(!(n>=0))return toast('Ingresá un monto válido');
+ const{error}=await SB.from('presupuestos').upsert({user_id:id,monto_usd:n});if(error)return toast('No se pudo guardar: '+error.message);toast('Presupuesto guardado');load()}
+async function del(id){if(!confirm('¿Borrar este gasto?'))return;const{error}=await SB.from('gastos').delete().eq('id',id);if(error)return toast('No se pudo borrar');toast('Gasto borrado');load()}
+$('#sv').onclick=async()=>{const n=parseFloat($('#mo').value);if(!(n>0))return toast('Ingresá un monto mayor a cero');
+ const{error}=await SB.from('gastos').insert({user_id:$('#who').value,monto_usd:n,categoria:$('#ca').value,descripcion:$('#de').value.trim()||null,fecha:$('#fe').value||hoy()});
+ if(error)return toast('No se pudo guardar: '+error.message);$('#mo').value='';$('#de').value='';toast('Gasto guardado');await load();tab('res')}
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+start();
+</script></body></html>
