@@ -41,7 +41,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <div class="tabs"><button data-t="res" class="on">Resumen</button><button data-t="add">Cargar</button><button data-t="lst">Gastos</button></div>
 <div id="res"></div>
 <div id="add" class="hide card"><h2>Nuevo gasto</h2>
-<label for="who">Persona</label><select id="who"></select>
+<div id="ab"><label for="am">Tipo de gasto</label><select id="am"><option value="personal">Personal</option><option value="familiar">Familiar</option></select></div><div id="wh"><label for="who">Persona</label><select id="who"></select></div>
 <label for="mo">Monto (US$)</label><input id="mo" type="number" inputmode="decimal" step="0.01" min="0">
 <label for="ca">Categoría</label><select id="ca"></select>
 <label for="de">Descripción (opcional)</label><input id="de" type="text" maxlength="80">
@@ -52,8 +52,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 const SB=supabase.createClient('https://yoikmpzkksjuddlmblxe.supabase.co','sb_publishable_63-A3pCwVkYWlKxhAbjwzg_JiB0VL0O');
-const CATS=['Comida','Indumentaria','Calzado','Accesorios','Beauty','Deporte','Electrónica','Hogar','Souvenirs y regalos','Juguetes y juegos','Transporte','Paseos','Alojamiento','Otros'];
-let me,adm=false,M=[],P={},G=[];
+const CF=['Comida','Transporte','Alojamiento','Paseos','Hogar','Souvenirs y regalos','Otros'],CP=['Indumentaria','Calzado','Accesorios','Beauty','Deporte','Electrónica','Juguetes y juegos','Otros'];
+let me,adm=false,M=[],P={},G=[],PF=0;
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const usd=n=>'US$ '+Number(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -62,14 +62,15 @@ function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';cl
 function show(id){['login','app'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id))}
 function tab(t){$$('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));['res','add','lst'].forEach(x=>$('#'+x).classList.toggle('hide',x!==t))}
 $$('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.t));
-$('#ca').innerHTML=CATS.map(c=>`<option>${esc(c)}</option>`).join('');
+function setCats(){const f=$('#am').value==='familiar';$('#ca').innerHTML=(f?CF:CP).map(c=>`<option>${esc(c)}</option>`).join('');$('#wh').classList.toggle('hide',f)}
+$('#am').onchange=setCats;setCats();
 $('#go').onclick=async()=>{const{error}=await SB.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});if(error)return toast('Email o contraseña incorrectos');start()};
 $('#out').onclick=async()=>{await SB.auth.signOut();show('login')};
 async function start(){const{data}=await SB.auth.getSession();if(!data.session)return show('login');me=data.session.user.id;show('app');$('#fe').value=hoy();await load()}
 async function load(){
- const[a,m,p,g]=await Promise.all([SB.from('admins').select('user_id'),SB.from('miembros').select('*').order('nombre'),SB.from('presupuestos').select('*'),SB.from('gastos').select('*').order('fecha',{ascending:false}).order('id',{ascending:false})]);
- const err=a.error||m.error||p.error||g.error;if(err)return toast('No se pudo cargar: '+err.message);
- adm=a.data.length>0;M=m.data;P={};p.data.forEach(x=>P[x.user_id]=+x.monto_usd);G=g.data;
+ const[a,m,p,g,f]=await Promise.all([SB.from('admins').select('user_id'),SB.from('miembros').select('*').order('nombre'),SB.from('presupuestos').select('*'),SB.from('gastos').select('*').order('fecha',{ascending:false}).order('id',{ascending:false}),SB.from('presupuesto_familiar').select('monto_usd')]);
+ const err=a.error||m.error||p.error||g.error||f.error;if(err)return toast('No se pudo cargar: '+err.message);
+ adm=a.data.length>0;M=m.data;P={};p.data.forEach(x=>P[x.user_id]=+x.monto_usd);G=g.data;PF=f.data.length?+f.data[0].monto_usd:0;$('#ab').classList.toggle('hide',!adm);
  $('#who').innerHTML=M.filter(x=>adm||x.user_id===me).map(x=>`<option value="${x.user_id}"${x.user_id===me?' selected':''}>${esc(x.nombre)}</option>`).join('');
  render()}
 function card(titulo,bud,gs,id){
@@ -82,21 +83,21 @@ function card(titulo,bud,gs,id){
  <div class="mu">Gastado ${usd(sp)} de ${usd(bud)} (${bud?Math.round(sp/bud*100):0}%)</div>
  ${cs.length?cs.map(([c,v])=>`<div class="cat"><div class="row"><span>${esc(c)}</span><span>${usd(v)}</span></div><div class="bar"><i style="width:${v/cs[0][1]*100}%"></i></div></div>`).join(''):'<p class="mu">Todavía no hay gastos.</p>'}</div>`}
 function render(){
- const tb=M.reduce((s,x)=>s+(P[x.user_id]||0),0);
+ const tb=PF+M.reduce((s,x)=>s+(P[x.user_id]||0),0);
  const ds=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const k=d.toLocaleDateString('sv-SE');ds.push([k,G.filter(x=>x.fecha===k).reduce((s,x)=>s+ +x.monto_usd,0)])}
  const mx=Math.max(1,...ds.map(d=>d[1]));
- let h=card('Total del grupo',tb,G,null)+M.map(x=>card(x.nombre,P[x.user_id]||0,G.filter(g=>g.user_id===x.user_id),x.user_id)).join('');
+ let h=card('Total del grupo',tb,G,null)+card('Familiar',PF,G.filter(g=>g.ambito==='familiar'),'fam')+M.map(x=>card(x.nombre,P[x.user_id]||0,G.filter(g=>g.ambito==='personal'&&g.user_id===x.user_id),x.user_id)).join('');
  h+=`<div class="card"><h2>Gasto por día (últimos 7 días)</h2><div class="days">${ds.map(([k,v])=>`<div><span>${v?Math.round(v):''}</span><i style="height:${v/mx*80}%"></i><span>${k.slice(8)}/${k.slice(5,7)}</span></div>`).join('')}</div></div>`;
  $('#res').innerHTML=h;
  $$('[data-b]').forEach(b=>b.onclick=()=>setBud(b.dataset.b));
  const nm=Object.fromEntries(M.map(x=>[x.user_id,x.nombre]));
- $('#lst').innerHTML='<h2>Últimos gastos</h2>'+(G.length?G.slice(0,60).map(x=>`<div class="g"><div><b>${usd(x.monto_usd)}</b> ${esc(x.categoria)}<div class="mu">${esc(nm[x.user_id]||'')} · ${x.fecha.slice(8)}/${x.fecha.slice(5,7)}${x.descripcion?' · '+esc(x.descripcion):''}</div></div>${adm||x.user_id===me?`<button data-d="${x.id}" aria-label="Borrar gasto">Borrar</button>`:''}</div>`).join(''):'<p class="mu">Todavía no hay gastos. Cargá el primero en la pestaña Cargar.</p>');
+ $('#lst').innerHTML='<h2>Últimos gastos</h2>'+(G.length?G.slice(0,60).map(x=>`<div class="g"><div><b>${usd(x.monto_usd)}</b> ${esc(x.categoria)}<div class="mu">${x.ambito==='familiar'?'Familiar':esc(nm[x.user_id]||'')} · ${x.fecha.slice(8)}/${x.fecha.slice(5,7)}${x.descripcion?' · '+esc(x.descripcion):''}</div></div>${adm||(x.ambito==='personal'&&x.user_id===me)?`<button data-d="${x.id}" aria-label="Borrar gasto">Borrar</button>`:''}</div>`).join(''):'<p class="mu">Todavía no hay gastos. Cargá el primero en la pestaña Cargar.</p>');
  $$('[data-d]').forEach(b=>b.onclick=()=>del(b.dataset.d))}
-async function setBud(id){const v=prompt('Presupuesto inicial en US$',P[id]||'');if(v===null)return;const n=parseFloat(v.replace(',','.'));if(!(n>=0))return toast('Ingresá un monto válido');
- const{error}=await SB.from('presupuestos').upsert({user_id:id,monto_usd:n});if(error)return toast('No se pudo guardar: '+error.message);toast('Presupuesto guardado');load()}
+async function setBud(id){const v=prompt('Presupuesto inicial en US$',(id==='fam'?PF:P[id])||'');if(v===null)return;const n=parseFloat(v.replace(',','.'));if(!(n>=0))return toast('Ingresá un monto válido');
+ const{error}=id==='fam'?await SB.from('presupuesto_familiar').upsert({id:1,monto_usd:n}):await SB.from('presupuestos').upsert({user_id:id,monto_usd:n});if(error)return toast('No se pudo guardar: '+error.message);toast('Presupuesto guardado');load()}
 async function del(id){if(!confirm('¿Borrar este gasto?'))return;const{error}=await SB.from('gastos').delete().eq('id',id);if(error)return toast('No se pudo borrar');toast('Gasto borrado');load()}
-$('#sv').onclick=async()=>{const n=parseFloat($('#mo').value);if(!(n>0))return toast('Ingresá un monto mayor a cero');
- const{error}=await SB.from('gastos').insert({user_id:$('#who').value,monto_usd:n,categoria:$('#ca').value,descripcion:$('#de').value.trim()||null,fecha:$('#fe').value||hoy()});
+$('#sv').onclick=async()=>{const fam=adm&&$('#am').value==='familiar',n=parseFloat($('#mo').value);if(!(n>0))return toast('Ingresá un monto mayor a cero');
+ const{error}=await SB.from('gastos').insert({user_id:fam?me:$('#who').value,ambito:fam?'familiar':'personal',monto_usd:n,categoria:$('#ca').value,descripcion:$('#de').value.trim()||null,fecha:$('#fe').value||hoy()});
  if(error)return toast('No se pudo guardar: '+error.message);$('#mo').value='';$('#de').value='';toast('Gasto guardado');await load();tab('res')}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 start();
